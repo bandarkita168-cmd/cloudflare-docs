@@ -228,7 +228,53 @@ server.listen(8080);
 export default httpServerHandler({ port: 8080 });
 ```
 
-The `httpServerHandler` function integrates Node.js HTTP servers with the Cloudflare Workers request model. When a request arrives at your Worker, the handler automatically routes it to your Node.js server running on the specified port. Handler is using the specified port to determine which app to route the request to. This bridge allows you to use familiar Node.js server patterns while benefiting from the Workers runtime environment, including automatic scaling, edge deployment, and integration with other Cloudflare services.
+## Node.js integration
+
+### httpServerHandler
+
+The `httpServerHandler` function integrates Node.js HTTP servers with the Cloudflare Workers request model. It supports two API patterns:
+
+```js
+import http from "node:http";
+import { httpServerHandler } from "cloudflare:node";
+
+const server = http.createServer((req, res) => {
+	res.end("hello world");
+});
+
+// Pass server directly (simplified) - automatically calls listen() if needed
+export default httpServerHandler(server);
+
+// Or use port-based routing for multiple servers
+server.listen(8080);
+export default httpServerHandler({ port: 8080 });
+```
+
+The handler automatically routes incoming Worker requests to your Node.js server. When using port-based routing, the port number acts as a routing key to determine which server handles requests, allowing multiple servers to coexist in the same Worker.
+
+### handleAsNodeRequest
+
+For more direct control over request routing, you can use the `handleAsNodeRequest` function from `cloudflare:node`. This function directly routes a Worker request to a Node.js server running on a specific port:
+
+```js
+import { createServer } from "node:http";
+import { handleAsNodeRequest } from "cloudflare:node";
+
+const server = createServer((req, res) => {
+	res.writeHead(200, { "Content-Type": "text/plain" });
+	res.end("Hello from Node.js HTTP server!");
+});
+
+server.listen(8080);
+
+export default {
+	fetch(request) {
+		return handleAsNodeRequest(8080, request);
+	},
+};
+```
+
+This approach gives you full control over the fetch handler while still leveraging Node.js HTTP servers for request processing.
 
 :::note
 Failing to call `close()` on an HTTP server may result in the server persisting until the worker is destroyed. In most cases, this is not an issue since servers typically live for the lifetime of the worker. However, if you need to create multiple servers during a worker's lifetime or want explicit lifecycle control (such as in test scenarios), call `close()` when you're done with the server, or use [explicit resource management](https://v8.dev/features/explicit-resource-management).
